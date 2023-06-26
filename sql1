@@ -1,0 +1,113 @@
+WITH latest_member_program AS (    SELECT         mp.member_id,         mp.program_id,         mp.status,        mp.codec,        mp.status_name,        RANK() OVER (PARTITION BY mp.member_id ORDER BY mp.updated_at DESC) as rn    FROM         member_program mp     WHERE         mp.status = 3700)SELECT     m.id AS member_id,    m.name AS member_name,    COUNT(DISTINCT p.name) AS unique_program_count,    CASE WHEN mp.status_name = 'programmclosed' AND mp.codec = 3702 THEN 'N' ELSE 'Y' END AS no_closed_program_indicatorFROM     members mJOIN     latest_member_program mp ON m.id = mp.member_id AND mp.rn = 1JOIN     programs p ON mp.program_id = p.idWHERE     m.system_id = 20685GROUP BY    m.id, m.nameHAVING     COUNT(DISTINCT p.name) > 1ORDER BY     unique_program_count DESC, m.name;
+
+
+-----------------------------------------
+
+WITH latest_member_program AS (
+    SELECT 
+        mp.member_id, 
+        mp.program_id, 
+        mp.status,
+        mp.codec,
+        mp.status_name,
+        m.system_id,
+        ROW_NUMBER() OVER (PARTITION BY mp.member_id ORDER BY mp.updated_at DESC) as rn
+    FROM 
+        member_program mp 
+    JOIN
+        members m ON m.id = mp.member_id
+    WHERE 
+        mp.status = 3700
+),
+previous_programs AS (
+    SELECT 
+        mp.member_id,
+        MAX(CASE WHEN mp.status_name IN ('referred', 'enrolled') THEN 'Y' ELSE 'N' END) as previous_program_status
+    FROM 
+        member_program mp
+    WHERE 
+        mp.status = 3700
+    GROUP BY
+        mp.member_id
+)
+SELECT 
+    m.id AS member_id,
+    m.name AS member_name,
+    m.system_id,
+    COUNT(DISTINCT p.name) AS unique_program_count,
+    pp.previous_program_status,
+    CASE WHEN mp.status_name = 'programmclosed' AND mp.codec = 3702 THEN 'N' ELSE 'Y' END AS no_closed_program_indicator
+FROM 
+    members m
+JOIN 
+    latest_member_program mp ON m.id = mp.member_id AND mp.rn = 1
+JOIN 
+    programs p ON mp.program_id = p.id
+JOIN
+    previous_programs pp ON m.id = pp.member_id
+WHERE 
+    m.system_id = 20685
+GROUP BY
+    m.id, m.name, m.system_id, pp.previous_program_status
+HAVING 
+    COUNT(DISTINCT p.name) > 1
+ORDER BY 
+    unique_program_count DESC, m.name;
+
+
+===================================================
+
+only one latest programs
+
+WITH latest_member_program AS (
+    SELECT 
+        mp.member_id, 
+        mp.program_id, 
+        mp.status,
+        mp.codec,
+        mp.status_name,
+        m.system_id,
+        ROW_NUMBER() OVER (PARTITION BY mp.member_id ORDER BY mp.updated_at DESC) as rn
+    FROM 
+        member_program mp 
+    JOIN
+        members m ON m.id = mp.member_id
+    WHERE 
+        mp.status = 3700
+),
+previous_programs AS (
+    SELECT 
+        mp.member_id,
+        COUNT(*) as total_programs,
+        MAX(CASE WHEN mp.status_name IN ('referred', 'enrolled') THEN 'Y' ELSE 'N' END) as previous_program_status
+    FROM 
+        member_program mp
+    WHERE 
+        mp.status = 3700
+    GROUP BY
+        mp.member_id
+)
+SELECT 
+    m.id AS member_id,
+    m.name AS member_name,
+    m.system_id,
+    COUNT(DISTINCT p.name) AS unique_program_count,
+    pp.previous_program_status,
+    CASE WHEN mp.status_name = 'programmclosed' AND mp.codec = 3702 THEN 'N' ELSE 'Y' END AS no_closed_program_indicator
+FROM 
+    members m
+JOIN 
+    latest_member_program mp ON m.id = mp.member_id AND mp.rn = 1
+JOIN 
+    programs p ON mp.program_id = p.id
+JOIN
+    previous_programs pp ON m.id = pp.member_id
+WHERE 
+    m.system_id = 20685
+    AND pp.total_programs = 1
+GROUP BY
+    m.id, m.name, m.system_id, pp.previous_program_status
+HAVING 
+    COUNT(DISTINCT p.name) > 1
+ORDER BY 
+    unique_program_count DESC, m.name;
